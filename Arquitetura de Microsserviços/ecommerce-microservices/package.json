@@ -1,0 +1,27 @@
+{
+  "name": "ecommerce-microservices",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Production-grade e-commerce microservices architecture",
+  "workspaces": [
+    "services/*",
+    "api-gateway",
+    "shared/common",
+    "shared/events"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "docker:up": "docker-compose -f infrastructure/docker/docker-compose.yml up -d",
+    "docker:down": "docker-compose -f infrastructure/docker/docker-compose.yml down",
+    "migrate:all": "bash scripts/migrate-all.sh",
+    "seed": "npx ts-node scripts/seed-data.ts"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.0"
+  }
+}
