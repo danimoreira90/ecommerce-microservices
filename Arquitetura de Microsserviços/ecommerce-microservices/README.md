@@ -1,9 +1,22 @@
-# E-Commerce Microservices
+# E-Commerce de Produtos Tecnológicos — Microsserviços
 
-Production-grade, event-driven e-commerce microservices following Clean Architecture, DDD, and Twelve-Factor principles.
+> **Cenário 3 — E-commerce de Produtos Tech**: alto giro de estoque, integração em tempo real com fornecedores, recomendações personalizadas, precificação dinâmica e comparação técnica de produtos.
 
-## Architecture Overview
+Plataforma de e-commerce production-grade, orientada a eventos, seguindo Clean Architecture, DDD e princípios Twelve-Factor App.
 
+## Documentação de Arquitetura
+
+| Documento | Descrição |
+|---|---|
+| [C4-ARCHITECTURE.md](docs/architecture/C4-ARCHITECTURE.md) | Modelo C4 completo (Contexto, Containers, Componentes), análise CAP e Twelve-Factor |
+| [C4-DIAGRAMS.md](docs/architecture/C4-DIAGRAMS.md) | Diagramas C4 em Mermaid (Context, Container, Component, Sequência) |
+| [ADR-001 — Apache Kafka](docs/architecture/ADR-001-kafka-event-driven.md) | Decisão: Kafka para comunicação assíncrona entre microsserviços |
+| [ADR-002 — Elasticsearch](docs/architecture/ADR-002-elasticsearch-search.md) | Decisão: Elasticsearch como motor de busca e descoberta de produtos |
+| [ADR-003 — Saga Pattern](docs/architecture/ADR-003-saga-pattern.md) | Decisão: Saga por coreografia para transações distribuídas |
+
+## Visão Geral da Arquitetura
+
+- **Cenário:** E-commerce de Produtos Tecnológicos (Cenário 3) — alto giro, precificação dinâmica, integração com fornecedores
 - **7 Bounded Contexts:** User, Product, Search, Cart, Order, Payment, Notification
 - **Message Broker:** Apache Kafka (event-driven, choreography-based sagas)
 - **API Gateway:** NestJS (routing, JWT validation, rate limiting)
