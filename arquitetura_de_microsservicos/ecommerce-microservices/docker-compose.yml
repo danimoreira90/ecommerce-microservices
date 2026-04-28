@@ -1,0 +1,178 @@
+version: '3.9'
+
+# ============================================================
+# docker-compose.yml — user-service (desenvolvimento local)
+# Demonstra:
+#   - bind mount: código-fonte do serviço montado no container
+#   - named volume: dados do PostgreSQL persistidos entre restarts
+# ============================================================
+
+services:
+
+  # ──────────────────────────────────────────────────────────
+  # PostgreSQL — banco de dados do user-service
+  # Named volume: postgres_data persiste entre "docker compose down/up"
+  # ──────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: userservice-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: user_service
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data   # named volume ← dado persistido
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d user_service"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # ──────────────────────────────────────────────────────────
+  # Redis — cache de sessão
+  # ──────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: userservice-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ──────────────────────────────────────────────────────────
+  # Zookeeper + Kafka — mensageria
+  # ──────────────────────────────────────────────────────────
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: userservice-zookeeper
+    restart: unless-stopped
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    healthcheck:
+      test: ["CMD-SHELL", "echo ruok | nc localhost 2181 | grep imok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: userservice-kafka
+    restart: unless-stopped
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics --bootstrap-server localhost:9092 --list"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  # ──────────────────────────────────────────────────────────
+  # user-service — aplicação NestJS
+  #
+  # BIND MOUNT: ./services/user-service/src é montado em
+  #   /app/services/user-service/src dentro do container,
+  #   permitindo hot-reload em desenvolvimento.
+  # ──────────────────────────────────────────────────────────
+  user-service:
+    build:
+      context: .
+      dockerfile: services/user-service/Dockerfile
+    image: danimoreira5150/user-service:latest
+    container_name: userservice-app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      NODE_ENV: development
+      PORT: "3000"
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: user_service
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      KAFKA_BROKERS: kafka:9092
+      KAFKA_GROUP_ID: user-service-group
+      JWT_SECRET: dev-secret-min-32-chars-change-in-prod
+      JWT_EXPIRATION: "15m"
+      REFRESH_TOKEN_EXPIRATION: "7d"
+    ports:
+      - "3001:3000"    # acesso local → http://localhost:3001
+    volumes:
+      # BIND MOUNT: código-fonte montado para reflexão imediata de mudanças
+      - ./services/user-service/src:/app/services/user-service/src:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/health/live || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ──────────────────────────────────────────────────────────
+  # Prometheus — coleta de métricas do /metrics
+  # ──────────────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.47.0
+    container_name: userservice-prometheus
+    restart: unless-stopped
+    volumes:
+      - ./infrastructure/docker/monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-lifecycle'
+
+  # ──────────────────────────────────────────────────────────
+  # Grafana — dashboards
+  # ──────────────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:10.1.0
+    container_name: userservice-grafana
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    ports:
+      - "3300:3000"
+
+# ============================================================
+# Volumes nomeados
+# postgres_data: persiste dados do banco entre "docker compose down/up"
+# ============================================================
+volumes:
+  postgres_data:
+    driver: local

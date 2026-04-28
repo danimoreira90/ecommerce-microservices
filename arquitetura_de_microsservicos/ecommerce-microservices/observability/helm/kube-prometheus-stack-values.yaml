@@ -1,0 +1,58 @@
+# kube-prometheus-stack — valores customizados para ambiente local (minikube)
+# Instalar com:
+#   helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+#   helm repo update
+#   helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+#     --namespace monitoring --create-namespace \
+#     -f observability/helm/kube-prometheus-stack-values.yaml
+
+grafana:
+  enabled: true
+  adminPassword: "admin123"
+  service:
+    type: NodePort
+    nodePort: 30300
+  persistence:
+    enabled: true
+    size: 2Gi
+  sidecar:
+    dashboards:
+      enabled: true
+      searchNamespace: ALL
+
+prometheus:
+  enabled: true
+  service:
+    type: ClusterIP
+  prometheusSpec:
+    retention: 7d
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 5Gi
+    # Scrape ServiceMonitors em todos os namespaces
+    serviceMonitorSelectorNilUsesHelmValues: false
+    serviceMonitorSelector: {}
+    serviceMonitorNamespaceSelector: {}
+    podMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelector: {}
+    podMonitorNamespaceSelector: {}
+
+alertmanager:
+  enabled: false
+
+nodeExporter:
+  enabled: true
+
+kubeStateMetrics:
+  enabled: true
+
+prometheusOperator:
+  enabled: true
+  tls:
+    enabled: false
+  admissionWebhooks:
+    enabled: false

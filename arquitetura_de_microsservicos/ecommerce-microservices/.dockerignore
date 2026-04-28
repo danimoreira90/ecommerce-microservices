@@ -1,0 +1,54 @@
+# Dependências (recriadas no build)
+**/node_modules
+**/.npm
+
+# Artefatos de build (recriados no build)
+**/dist
+**/build
+**/.next
+
+# Git e controle de versão
+.git
+.gitignore
+**/.gitkeep
+
+# Testes e coverage
+**/coverage
+**/__tests__
+**/*.test.ts
+**/*.spec.ts
+**/jest.config.js
+
+# Documentação e configurações locais
+docs/
+*.md
+.env
+.env.*
+!.env.example
+
+# IDEs e editores
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Ferramentas de SO
+.DS_Store
+Thumbs.db
+
+# CI/CD e infraestrutura (não necessários na imagem)
+.github/
+infrastructure/
+k8s/
+stress/
+observability/
+ci/
+
+# Terraform
+**/.terraform
+**/*.tfstate
+**/*.tfstate.backup
+
+# Logs
+*.log
+npm-debug.log*

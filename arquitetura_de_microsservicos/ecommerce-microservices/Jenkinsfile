@@ -1,0 +1,120 @@
+pipeline {
+    agent any
+
+    environment {
+        DOCKER_HUB_USER  = 'danimoreira5150'
+        IMAGE_NAME       = "${DOCKER_HUB_USER}/user-service"
+        IMAGE_TAG        = "${BUILD_NUMBER}"
+        IMAGE_LATEST     = "${IMAGE_NAME}:latest"
+        IMAGE_VERSIONED  = "${IMAGE_NAME}:${IMAGE_TAG}"
+        K8S_NAMESPACE    = 'ecommerce'
+        KUBECONFIG_PATH  = credentials('kubeconfig-minikube')
+    }
+
+    options {
+        timestamps()
+        timeout(time: 30, unit: 'MINUTES')
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                echo "==> Checkout do código-fonte"
+                checkout scm
+                sh 'git log --oneline -5'
+            }
+        }
+
+        stage('Docker Build') {
+            steps {
+                echo "==> Build da imagem Docker multi-stage"
+                dir('arquitetura_de_microsservicos/ecommerce-microservices') {
+                    sh """
+                        docker build \
+                            -f services/user-service/Dockerfile \
+                            -t ${IMAGE_VERSIONED} \
+                            -t ${IMAGE_LATEST} \
+                            .
+                    """
+                }
+                echo "==> Imagem construída: ${IMAGE_VERSIONED}"
+            }
+        }
+
+        stage('Docker Push') {
+            steps {
+                echo "==> Push para Docker Hub"
+                withCredentials([usernamePassword(
+                    credentialsId: 'dockerhub-credentials',
+                    usernameVariable: 'DOCKER_USER',
+                    passwordVariable: 'DOCKER_PASS'
+                )]) {
+                    sh """
+                        echo "${DOCKER_PASS}" | docker login -u "${DOCKER_USER}" --password-stdin
+                        docker push ${IMAGE_VERSIONED}
+                        docker push ${IMAGE_LATEST}
+                        docker logout
+                    """
+                }
+                echo "==> Push concluído: ${IMAGE_VERSIONED}"
+            }
+        }
+
+        stage('K8s Deploy') {
+            steps {
+                echo "==> Deploy no Kubernetes (minikube)"
+                withEnv(["KUBECONFIG=${KUBECONFIG_PATH}"]) {
+                    dir('arquitetura_de_microsservicos/ecommerce-microservices') {
+                        sh """
+                            kubectl apply -k k8s/overlays/local
+                            kubectl set image deployment/user-service \
+                                user-service=${IMAGE_VERSIONED} \
+                                -n ${K8S_NAMESPACE}
+                            kubectl rollout status deployment/user-service \
+                                -n ${K8S_NAMESPACE} \
+                                --timeout=120s
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Smoke Test') {
+            steps {
+                echo "==> Smoke test: verifica se o serviço responde"
+                script {
+                    def minikubeIp = sh(
+                        script: 'minikube ip',
+                        returnStdout: true
+                    ).trim()
+                    def serviceUrl = "http://${minikubeIp}:30001"
+
+                    retry(5) {
+                        sleep(time: 10, unit: 'SECONDS')
+                        sh """
+                            curl -sf ${serviceUrl}/health/live \
+                                || (echo 'Liveness falhou' && exit 1)
+                            curl -sf ${serviceUrl}/health/ready \
+                                || (echo 'Readiness falhou' && exit 1)
+                            echo 'Smoke test PASSOU — servico esta respondendo'
+                        """
+                    }
+                    echo "==> Servico acessivel em: ${serviceUrl}"
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "✔ Pipeline concluido com sucesso. Build #${BUILD_NUMBER} em producao."
+        }
+        failure {
+            echo "✘ Pipeline falhou. Verifique os logs acima."
+        }
+        always {
+            sh 'docker image prune -f || true'
+        }
+    }
+}
