@@ -272,3 +272,10 @@ O pipeline implementado cobre o ciclo completo de DevOps:
 5. **Testes de carga** com k6 e JMeter (thresholds objetivos, ramp progressivo)
 
 Todas as práticas de 12-Factor App foram aplicadas: configuração via variáveis de ambiente, logs em stdout, processos stateless, graceful shutdown com SIGTERM.
+
+---
+## Repositorio
+
+**GitHub:** https://github.com/danimoreira90/ecommerce-microservices
+
+**Docker Hub:** https://hub.docker.com/r/danimoreira5150/user-service
